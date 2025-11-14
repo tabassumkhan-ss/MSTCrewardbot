@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MSTC Earning Project — Deposit & Reward System</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    /* (kept your same styles) */
+    * { box-sizing: border-box; }
+    body {
+      margin:0; height:100vh; display:flex; align-items:center; justify-content:center;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      text-align:center; color:#fff;
+      background: radial-gradient(1200px 600px at 50% -20%, rgba(255,255,255,.08), transparent 60%),
+                  linear-gradient(135deg, #5c3cff, #0e1630 60%);
+      overflow:auto; padding:18px;
+    }
+    .card {
+      width:min(720px, 96vw);
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 20px;
+      padding: 22px;
+      box-shadow: 0 18px 50px rgba(0,0,0,.25);
+      backdrop-filter: blur(6px);
+      margin: 0 auto;
+    }
+
+    .logo {
+      width: 88px; height: 88px; border-radius: 50%; object-fit: cover;
+      border: 4px solid rgba(255,255,255,.35); margin: 0 auto 14px; display:block;
+      box-shadow: 0 10px 26px rgba(0,0,0,.35), 0 0 0 8px rgba(255,255,255,.08) inset;
+      position: relative;
+    }
+    .logo.glow { border-color: transparent; box-shadow: none; isolation:isolate; }
+    .logo.glow::before, .logo.glow::after {
+      content: ""; position: absolute; inset: -6px; border-radius: 50%; z-index: -1;
+    }
+    .logo.glow::before {
+      background: conic-gradient(from 0deg,#6cf 0%,#8af 25%,#9ff 50%,#7df 75%,#6cf 100%);
+      filter: blur(6px); animation: spin 4s linear infinite; opacity: .95;
+    }
+    .logo.glow::after {
+      inset: -14px; background: radial-gradient(closest-side, rgba(108,240,255,.5), rgba(0,0,0,0));
+      filter: blur(10px); opacity: .65;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    h2 { margin:0 0 10px; font-weight:700; }
+    .row { margin:10px 0; font-size:1.05rem; }
+    .big { font-size:1.25rem; font-weight:700; }
+
+    .actions { margin-top:16px; display:flex; gap:12px; justify-content:center; }
+    .btn {
+      padding:11px 22px; border-radius:22px; border:0; cursor:pointer; font-weight:600;
+      background:#00c853; color:#fff; box-shadow:0 8px 24px rgba(0,200,83,.35);
+    }
+    .btn.alt { background:#e53935; box-shadow:0 8px 24px rgba(229,57,53,.35); }
+
+    .ref-line { display:flex; align-items:center; justify-content:center; gap:10px; margin-top:8px; }
+    .copy-btn {
+      display:inline-flex; align-items:center; justify-content:center;
+      width:36px; height:36px; border-radius:10px; border:none; cursor:pointer;
+      background: rgba(255,255,255,.16); color:#fff; font-size:18px;
+      transition: transform .12s ease, opacity .2s;
+    }
+    .copy-btn:active { transform: scale(.96); }
+    .hint { font-size:.85rem; opacity:.85; margin-top:8px; }
+    .tooltip { margin-top:8px; font-size:.85rem; opacity:0; transition:opacity .25s; }
+    .show { opacity:1; }
+
+    .panel { margin-top:18px; text-align:left; background:rgba(0,0,0,.18); padding:16px; border-radius:14px; }
+    .panel h3 { margin:0 0 10px; color:#fff; }
+    label { display:block; font-size:.95rem; opacity:.9; margin:10px 0 6px; }
+    input, .addr-box {
+      width:100%; padding:12px 12px; border-radius:10px; border:1px solid rgba(255,255,255,.18);
+      background: rgba(255,255,255,.08); color:#fff; outline:none;
+    }
+    .split { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px; }
+    .rowline { display:flex; align-items:center; gap:10px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; word-break: break-all; }
+    .mini { font-size:.9rem; opacity:.9; }
+    .submit { margin-top:14px; text-align:right; }
+    .btn.secondary { background:#2a7de1; box-shadow:0 8px 24px rgba(42,125,225,.35); }
+    .error { color:#ffb4b4; font-size:.9rem; margin-top:6px; }
+    .ok    { color:#b5ffcb; font-size:.9rem; margin-top:6px; }
+  </style>
+</head>
+<body>
+  <div class="card" id="app">
+    <img src="./Botologo_new.png" alt="MSTC EARNING PROJECT" class="logo" id="avatar" />
+    <h2>Do you want to Register?</h2>
+    <div class="actions">
+      <button class="btn" id="yesBtn">✅ Yes</button>
+      <button class="btn alt" id="noBtn">❌ No</button>
+    </div>
+  </div>
+
+  <script>
+    const tg = window.Telegram.WebApp;
+    try { tg.ready(); tg.expand(); } catch(e){ /* ignore if not available */ }
+
+    const app = document.getElementById('app');
+    const baseLogo = './Botologo_new.png';
+
+    // ---- replace with your real wallets ----
+    const ADDR_MUSD = "0x7e6916Af95714BE309cF3eee98149074921D93e0";
+    const ADDR_MSTC = "0x7e6916Af95714BE309cF3eee98149074921D93e0";
+    const CHAIN_LABEL = "EVM Chain";
+
+    // session token from server after verify
+    window.SESSION_TOKEN = null;
+
+    // helpers
+    function savePendingPayload(k,d){try{localStorage.setItem(k,JSON.stringify(d));}catch{}}
+    function loadPendingPayload(k){try{return JSON.parse(localStorage.getItem(k)||"null");}catch{return null;}}
+    function clearPendingPayload(k){try{localStorage.removeItem(k);}catch{}}
+    function copyText(txt,tip){navigator.clipboard.writeText(txt).then(()=>{tip.classList.add('show');setTimeout(()=>tip.classList.remove('show'),1200);}).catch(()=>alert('Copy failed'));}
+
+    function fmt(n){return Number(n).toFixed(2);}
+
+    // verify initData with backend and obtain session token
+    async function verifyInitData() {
+      const initData = window.Telegram?.WebApp?.initData || "";
+      if(!initData) {
+        // if no initData (desktop web) try initDataUnsafe user as fallback for dev
+        console.warn("initData missing — WebApp may not be running inside Telegram.");
+      }
+      try {
+        const res = await fetch('/webapp/verify', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ init_data: initData })
+        });
+        if(!res.ok) {
+          const e = await res.json().catch(()=>({detail:res.statusText}));
+          throw new Error(e.detail || 'verify failed');
+        }
+        const j = await res.json();
+        window.SESSION_TOKEN = j.token;
+        return j;
+      } catch (err) {
+        console.error('verify error', err);
+        alert('Failed to verify Telegram session: ' + err.message);
+        throw err;
+      }
+    }
+
+    // render UI for a verified user
+    function renderRegisteredView(uid, name, avatar) {
+      const ref = `https://t.me/ref786bot?start=${uid}`;
+      app.innerHTML=`
+        <img src="${avatar||baseLogo}" class="logo glow" />
+        <div class="row big">${uid??'(unknown)'}</div>
+        <div class="row">${name||'Unknown'}</div>
+        <div class="row ref-line">
+          <span class="mini">Referral Link</span><button class="copy-btn" id="copyRef">📋</button>
+        </div>
+        <div class="tooltip" id="tipRef">Copied!</div>
+
+        <div class="panel">
+          <h3>💳 Deposit</h3>
+          <div class="mini">Minimum deposit — <b>$20</b>.</div>
+
+          <label>Enter USD amount</label>
+          <input id="amt" type="number" min="20" step="0.01" placeholder="e.g., 20.00" />
+          <div id="err" class="error" style="display:none;"></div>
+
+          <div class="split">
+            <div>
+              <div class="mini">MUSD (70%)</div>
+              <div class="rowline"><span id="musdAmt" class="big">0.00</span><span class="mini">USD</span></div>
+              <label class="mini" style="margin-top:8px;">Send to (MUSD address)</label>
+              <div class="addr-box mono">${ADDR_MUSD}</div>
+              <div class="rowline" style="margin-top:6px;">
+                <button class="copy-btn" id="copyMUSD">📋</button><span class="mini">${CHAIN_LABEL}</span>
+              </div>
+              <label class="mini" style="margin-top:8px;">MUSD Tx Hash</label>
+              <input id="txMUSD" type="text" placeholder="Paste transaction hash" />
+            </div>
+
+            <div>
+              <div class="mini">MSTC (30%)</div>
+              <div class="rowline"><span id="mstcAmt" class="big">0.00</span><span class="mini">USD</span></div>
+              <label class="mini" style="margin-top:8px;">Send to (MSTC address)</label>
+              <div class="addr-box mono">${ADDR_MSTC}</div>
+              <div class="rowline" style="margin-top:6px;">
+                <button class="copy-btn" id="copyMSTC">📋</button><span class="mini">${CHAIN_LABEL}</span>
+              </div>
+              <label class="mini" style="margin-top:8px;">MSTC Tx Hash</label>
+              <input id="txMSTC" type="text" placeholder="Paste transaction hash" />
+            </div>
+          </div>
+
+          <div class="submit"><button class="btn secondary" id="submitDeposit">Submit Deposit</button></div>
+          <div id="submitMsg" class="ok" style="display:none;">Submitted! We’ll verify your transactions shortly.</div>
+        </div>`;
+      const tip=document.getElementById('tipRef');
+      document.getElementById('copyRef').onclick=()=>copyText(ref,tip);
+
+      const amt=document.getElementById('amt'),musd=document.getElementById('musdAmt'),mstc=document.getElementById('mstcAmt'),err=document.getElementById('err');
+      amt.oninput=()=>{
+        const v=parseFloat(amt.value||'0');
+        if(isNaN(v)||v<=0){musd.textContent='0.00';mstc.textContent='0.00';err.style.display='none';return;}
+        musd.textContent=fmt(v*0.70);
+        mstc.textContent=fmt(v*0.30);
+        err.style.display=v<20?'block':'none';
+        err.textContent=v<20?'Minimum deposit is $20.':'';
+      };
+
+      document.getElementById('copyMUSD').onclick=()=>copyText(ADDR_MUSD,tip);
+      document.getElementById('copyMSTC').onclick=()=>copyText(ADDR_MSTC,tip);
+
+      document.getElementById('submitDeposit').onclick=async ()=>{
+        const v=parseFloat(amt.value||'0'),tx1=document.getElementById('txMUSD').value.trim(),tx2=document.getElementById('txMSTC').value.trim();
+        const msg=document.getElementById('submitMsg');
+        if(isNaN(v)||v<20){err.style.display='block';err.textContent='Please enter at least $20.';return;}
+        if(!tx1||!tx2){err.style.display='block';err.textContent='Please paste both transaction hashes.';return;}
+
+        // Build payload
+        const payload = {
+          amount_usd: Number(v.toFixed(2)),
+          musd_usd: Number((v*0.70).toFixed(2)),
+          mstc_usd: Number((v*0.30).toFixed(2)),
+          tx_musd: tx1,
+          tx_mstc: tx2,
+        };
+
+        try {
+          if(!window.SESSION_TOKEN) throw new Error('Missing session token (verify failed)');
+          const res = await fetch('/api/submit_onchain_deposit', {
+            method: 'POST',
+            headers: {
+              'Content-Type':'application/json',
+              'Authorization': 'Bearer ' + window.SESSION_TOKEN
+            },
+            body: JSON.stringify(payload)
+          });
+          const j = await res.json();
+          if(!res.ok) throw new Error(j.detail || JSON.stringify(j));
+          // success path
+          msg.style.display='block';
+          // optionally notify bot by opening bot link (auto-resume style)
+          clearPendingPayload("pending_deposit");
+          // If inside Telegram, send {action: 'deposit_submitted'} to the chat via sendData to notify bot
+          try { tg.sendData(JSON.stringify({action:'deposit_submitted', deposit_id:j.deposit_id})); } catch(e){}
+        } catch (err) {
+          console.error('submit error', err);
+          err = err.message || err;
+          alert('Failed to submit deposit: ' + err);
+        }
+      };
+    }
+
+    // When user taps Yes -> verify initData and then render
+    document.getElementById('yesBtn').onclick = async () => {
+      try {
+        const verifyResp = await verifyInitData(); // returns { token, telegram_id }
+        // read user info from initDataUnsafe only for display (not for security)
+        const u = window.Telegram?.WebApp?.initDataUnsafe?.user || {};
+        const id = verifyResp.telegram_id || u.id || (u.username?0:0);
+        const name = [u.first_name, u.last_name].filter(Boolean).join(' ') || (u.username? '@'+u.username : 'Unknown');
+        const avatar = u.photo_url || baseLogo;
+        renderRegisteredView(id, name, avatar);
+      } catch (err) {
+        // verifyInitData already alerts
+      }
+    };
+
+    document.getElementById('noBtn').onclick=()=>{
+      app.innerHTML=`<img src="${baseLogo}" class="logo"/><div class="row big">❌ Registration Cancelled</div>`;
+    };
+
+    // Auto-resume: If user previously saved a pending payload (older flow), try to auto-send when context available
+    (function autoResume(){
+      const pending = loadPendingPayload("pending_deposit");
+      // If we have pending and we have a session, try to submit automatically
+      if(pending && window.Telegram?.WebApp?.initData) {
+        // attempt verify first
+        verifyInitData().then(()=> {
+          // send to server
+          // NOTE: this uses the same endpoint as normal submit flow, but we include tx hashes and amount from pending
+          (async ()=> {
+            try {
+              const res = await fetch('/api/submit_onchain_deposit', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json','Authorization':'Bearer '+window.SESSION_TOKEN},
+                body: JSON.stringify({
+                  amount_usd: pending.amount,
+                  musd_usd: pending.musd_usd,
+                  mstc_usd: pending.mstc_usd,
+                  tx_musd: pending.tx_musd,
+                  tx_mstc: pending.tx_mstc
+                })
+              });
+              if(res.ok){ clearPendingPayload("pending_deposit"); }
+            } catch(e){ console.warn('autoResume failed', e); }
+          })();
+        }).catch(()=>{ /* ignore */ });
+      }
+    })();
+
+  </script>
+</body>
+</html>
